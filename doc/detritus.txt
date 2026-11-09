@@ -1,0 +1,27 @@
+*detritus.txt*  Manual implementation plans from your agent, in a panel
+
+See README.md for full documentation.
+
+COMMANDS                                                          *:Detritus*
+
+:Detritus [toggle|open|close|refresh|branch|clear|mcp]
+
+LUA API                                                          *detritus.lua*
+
+require("detritus").setup({opts})   Configure (see README.md)
+require("detritus").toggle()        Toggle the panel
+require("detritus").open()          Open (and focus) the panel
+require("detritus").close()         Close the panel; the buffer persists
+require("detritus").select_branch() View another branch's plan
+require("detritus").clear()         Delete the displayed plan
+require("detritus").status()        Progress such as "2/5" for statuslines
+require("detritus").edgy_view()     View spec for edgy.nvim
+require("detritus").mcp_command()   Command that starts the MCP server
+
+PANEL KEYS                                                  *detritus-keys*
+
+x, <CR>   toggle done        gd   go to reference     a    add step
+dd        delete step        za   fold details        R    refresh
+]] / [[   next/prev open     q    close               ?    help
+
+vim:tw=78:ts=8:ft=help:norl:
