@@ -1,27 +1,231 @@
-*detritus.txt*  Manual implementation plans from your agent, in a panel
+*detritus.txt*  A persistent plan panel for Neovim, fed by an agent over MCP
 
-See README.md for full documentation.
+Author:  Hogan McDonald
+License: MIT
+Source:  https://github.com/HoganMcDonald/detritus.nvim
 
-COMMANDS                                                          *:Detritus*
+==============================================================================
+CONTENTS                                                    *detritus-contents*
+
+  1. Introduction ........................ |detritus-introduction|
+  2. Requirements ........................ |detritus-requirements|
+  3. Installation ........................ |detritus-install|
+  4. Configuration ....................... |detritus-config|
+  5. Commands ............................ |:Detritus|
+  6. Panel keys .......................... |detritus-keys|
+  7. Lua API ............................. |detritus.lua|
+  8. MCP server .......................... |detritus-mcp|
+  9. Database ............................ |detritus-database|
+ 10. Health check ........................ |detritus-health|
+
+==============================================================================
+1. INTRODUCTION                                         *detritus-introduction*
+
+You plan a feature with an agent, then say "I want to implement this myself".
+The agent decomposes the work into small steps and stores them through
+detritus's MCP tools (|detritus-mcp|). They appear in a panel next to your
+code, where you check them off and jump to the files and symbols they mention
+with `gd`.
+
+Steps are stored in SQLite, partitioned by project and git branch. Switching
+branches switches plans. If the agent changes a step you have already seen, it
+is flagged and unchecked so you know to revisit it. Agents cannot check steps
+off; only you can.
+
+==============================================================================
+2. REQUIREMENTS                                         *detritus-requirements*
+
+- Neovim 0.10 or newer (LuaJIT)
+- `git`
+- The system `libsqlite3`. Set `$DETRITUS_SQLITE_LIB` to its path if it is not
+  found.
+- Optional: edgy.nvim for the `edgy` layout.
+
+Run |:checkhealth| detritus to verify.
+
+==============================================================================
+3. INSTALLATION                                              *detritus-install*
+
+No build step is needed.
+
+lazy.nvim: >lua
+    { "HoganMcDonald/detritus.nvim", cmd = "Detritus", opts = {} }
+<
+vim.pack (Neovim 0.12): >lua
+    vim.pack.add({ "https://github.com/HoganMcDonald/detritus.nvim" })
+    require("detritus").setup()
+<
+`setup()` is optional; the defaults work without it.
+
+==============================================================================
+4. CONFIGURATION                                              *detritus-config*
+
+Defaults: >lua
+    require("detritus").setup({
+      layout = "edgy", -- "edgy" | "float" | "sidebar"
+      width = 50,
+      float = { width = 0.4, height = 0.6, border = "rounded" },
+      enter = true,
+      db_path = nil,
+      poll_ms = 1000,
+      icons = {
+        done = "✓", todo = "☐", changed = "⚠️",
+        bullet = "•", ref = "↳", branch = "\u{e0a0}",
+      },
+      keys = {
+        toggle = { "x", "<CR>" },
+        goto_ref = "gd",
+        add = "a",
+        delete = "dd",
+        fold = "za",
+        fold_all = "zM",
+        unfold_all = "zR",
+        next_open = "]]",
+        prev_open = "[[",
+        refresh = "R",
+        close = "q",
+        help = "?",
+      },
+    })
+<
+                                                            *detritus-layout*
+layout ~
+  `edgy`     A right split that edgy.nvim adopts. Falls back to `sidebar` if
+             edgy.nvim is not installed. Add a view for it to your edgy
+             config: >lua
+                 require("edgy").setup({
+                   right = { require("detritus").edgy_view() },
+                 })
+<
+  `sidebar`  A full-height split on the right with a fixed `width`.
+  `float`    A centered floating window. `gd` closes it after jumping.
+
+enter ~
+  Focus the panel when it opens.
+
+db_path ~
+  Database location. See |detritus-database|. Prefer `$DETRITUS_DB`.
+
+poll_ms ~
+  Safety-net poll interval while the panel is visible. `0` disables it.
+
+keys ~
+  Buffer-local mappings. Set one to `false` to disable it. No global mappings
+  are created; bind your own: >lua
+      vim.keymap.set("n", "<leader>pp", "<cmd>Detritus toggle<cr>")
+<
+==============================================================================
+5. COMMANDS                                                       *:Detritus*
 
 :Detritus [toggle|open|close|refresh|branch|clear|mcp]
 
-LUA API                                                          *detritus.lua*
+  toggle    Toggle the panel (default)
+  open      Open and focus the panel
+  close     Close the panel; the buffer persists
+  refresh   Reload the plan from the database
+  branch    Pick another branch's plan to view. Unpins when you check out
+            something else.
+  clear     Delete the displayed plan (asks first)
+  mcp       Show the MCP server command and copy it to the clipboard
 
-require("detritus").setup({opts})   Configure (see README.md)
+==============================================================================
+6. PANEL KEYS                                                   *detritus-keys*
+
+  x, <CR>   Toggle done. Checking a flagged step acknowledges it.
+  gd        Jump to a reference
+  ]] / [[   Next / previous unchecked step
+  za        Fold or unfold a step's details (zM / zR for all)
+  a         Add your own step after the current one
+  dd        Delete a step (asks first)
+  R         Refresh
+  q         Close
+  ?         Show the key list
+
+                                                                *detritus-gd*
+`gd` picks its target in this order:
+
+  1. On a `↳ path:line  symbol` line: that reference.
+  2. On a backticked token in the step text: that file or symbol, searched in
+     the step's referenced files first.
+  3. Otherwise the step's references, asking which one if there are several.
+
+Symbols are resolved with LSP `documentSymbol` when a client is attached, and
+a definition-aware text search otherwise. Symbol-only references use
+`workspace/symbol`, then `git grep`.
+
+==============================================================================
+7. LUA API                                                       *detritus.lua*
+
+require("detritus").setup({opts})   Configure (see |detritus-config|)
 require("detritus").toggle()        Toggle the panel
 require("detritus").open()          Open (and focus) the panel
 require("detritus").close()         Close the panel; the buffer persists
+require("detritus").refresh()       Reload the plan
 require("detritus").select_branch() View another branch's plan
 require("detritus").clear()         Delete the displayed plan
-require("detritus").status()        Progress such as "2/5" for statuslines
+require("detritus").status()        Progress such as "2/5" for statuslines;
+                                    empty when there is no plan
 require("detritus").edgy_view()     View spec for edgy.nvim
 require("detritus").mcp_command()   Command that starts the MCP server
+require("detritus").version         Plugin version string
 
-PANEL KEYS                                                  *detritus-keys*
+==============================================================================
+8. MCP SERVER                                                    *detritus-mcp*
 
-x, <CR>   toggle done        gd   go to reference     a    add step
-dd        delete step        za   fold details        R    refresh
-]] / [[   next/prev open     q    close               ?    help
+The server speaks MCP over stdio and runs headless, so it works whether or
+not Neovim is open. It resolves the plan from the working directory it was
+started in (the agent's project), partitioned by the checked-out branch.
+
+Run |:Detritus| mcp to get the exact command for your install; the path
+depends on where your plugin manager puts the plugin. The shape is: >
+    nvim --headless --clean -l <plugin-dir>/bin/detritus-mcp.lua
+<
+Register that command with your agent as a stdio MCP server. For example, with
+Claude Code: >
+    claude mcp add --scope user detritus -- \
+      nvim --headless --clean -l <plugin-dir>/bin/detritus-mcp.lua
+<
+Tools (all accept optional `project_dir` and `branch`):
+
+  get_plan      Title, progress and every step
+  get_step      One step
+  set_plan      Replace the whole plan (discards progress)
+  update_plan   Set the plan title
+  add_steps     Add steps; append, or insert after a step id (`0` = start)
+  update_step   Patch `text`, `details` or `refs`; real changes flag the step
+  move_step     Reorder (never flags)
+  delete_step   Remove a step
+  clear_plan    Delete the branch's plan
+  list_plans    Every branch in the project that has a plan
+
+A step is `{ text, details?: string[], refs?: [{ path?, line?, symbol? }] }`.
+Paths are relative to the repository root.
+
+==============================================================================
+9. DATABASE                                                 *detritus-database*
+
+One SQLite file (WAL mode) holds every project: >
+    ${XDG_DATA_HOME:-~/.local/share}/detritus/detritus.db
+<
+It ignores `$NVIM_APPNAME`, so the headless server and every Neovim config
+share it.
+
+To relocate it, set `$DETRITUS_DB` for both Neovim and the MCP server. Setting
+only `setup({ db_path })` splits the panel from the server; |:checkhealth|
+warns about that.
+
+Plans are keyed by (project, branch). The project is the repository's common
+git directory, so every worktree of a repo shares it while each branch keeps
+its own plan. A detached HEAD uses `@<short-sha>`. Outside git the directory is
+the project and the branch is `_`.
+
+==============================================================================
+10. HEALTH CHECK                                               *detritus-health*
+
+>
+    :checkhealth detritus
+<
+Verifies the Neovim version, libsqlite3, git, database access, edgy.nvim, and
+prints the MCP command.
 
 vim:tw=78:ts=8:ft=help:norl:

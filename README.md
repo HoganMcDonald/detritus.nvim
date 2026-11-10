@@ -1,6 +1,15 @@
 # detritus.nvim
 
+[![CI](https://github.com/HoganMcDonald/detritus.nvim/actions/workflows/ci.yml/badge.svg)](https://github.com/HoganMcDonald/detritus.nvim/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Neovim 0.10+](https://img.shields.io/badge/Neovim-0.10%2B-green.svg?logo=neovim&logoColor=white)
+
 A persistent plan panel for Neovim, fed by an agent over MCP.
+
+AI agents are good at planning and happy to write all the code. Sometimes you
+want to write it yourself and use the agent as a planner. detritus gives the
+agent somewhere to put the plan, and gives you a checklist that lives next to
+your code.
 
 You plan a feature with an agent, then say "I want to implement this myself".
 The agent decomposes the work into small, one-sentence steps and stores them
@@ -28,6 +37,25 @@ with `gd`.
   unchecked so you know to go back to it.
 - The MCP server runs without Neovim. The panel picks up the agent's writes live.
 
+## Quick start
+
+1. **Install the plugin** (see [Install](#install)).
+2. **Register the MCP server with your agent.** Run `:Detritus mcp` in Neovim: it
+   prints the exact command for your install and copies it to your clipboard.
+   See [MCP server](#mcp-server) for Claude Code, OpenCode and Codex.
+3. **Ask your agent to plan, then take over.** Say something like "plan this
+   feature, then store the steps in detritus, I'll implement it myself". Open
+   the panel with `:Detritus`.
+
+## Contents
+
+- [Requirements](#requirements)
+- [Install](#install)
+- [Using the panel](#using-the-panel)
+- [MCP server](#mcp-server)
+- [Database](#database)
+- [Contributing](#contributing)
+
 ## Requirements
 
 - Neovim 0.10+ (LuaJIT)
@@ -35,17 +63,26 @@ with `gd`.
 - The system `libsqlite3` (macOS and most Linux distros ship it). Set
   `DETRITUS_SQLITE_LIB` to its path if it is not found. `:checkhealth detritus`
   verifies everything.
+- macOS or Linux. Windows is untested.
 - Optional: [edgy.nvim](https://github.com/folke/edgy.nvim) for the `edgy` layout.
 
 ## Install
 
+No build step is needed, and `setup()` is optional.
+
 ```lua
 -- lazy.nvim
-{ "you/detritus.nvim", opts = { layout = "edgy" } }
+{ "HoganMcDonald/detritus.nvim", cmd = "Detritus", opts = {} }
 
--- a local checkout
-{ dir = "~/detritus.nvim", cmd = "Detritus", opts = {} }
+-- vim.pack (Neovim 0.12+)
+vim.pack.add({ "https://github.com/HoganMcDonald/detritus.nvim" })
+require("detritus").setup()
+
+-- a local checkout (lazy.nvim)
+{ dir = "~/src/detritus.nvim", cmd = "Detritus", opts = {} }
 ```
+
+After installing, run `:checkhealth detritus`.
 
 ### Layouts
 
@@ -152,11 +189,16 @@ It resolves the plan from the **working directory it was started in** (the
 agent's project), partitioned by the checked-out branch, and re-checks the
 branch on every call.
 
+The path to `detritus-mcp.lua` depends on where your plugin manager puts the
+plugin (for lazy.nvim that is `~/.local/share/nvim/lazy/detritus.nvim` by
+default). Run **`:Detritus mcp`** to get the exact command for your machine. The
+snippets below use `/path/to/detritus.nvim` as a stand-in.
+
 ### Claude Code
 
 ```sh
 claude mcp add --scope user detritus -- \
-  nvim --headless --clean -l ~/detritus.nvim/bin/detritus-mcp.lua
+  nvim --headless --clean -l /path/to/detritus.nvim/bin/detritus-mcp.lua
 ```
 
 ### OpenCode (`opencode.json`)
@@ -166,7 +208,7 @@ claude mcp add --scope user detritus -- \
   "mcp": {
     "detritus": {
       "type": "local",
-      "command": ["nvim", "--headless", "--clean", "-l", "/Users/you/detritus.nvim/bin/detritus-mcp.lua"]
+      "command": ["nvim", "--headless", "--clean", "-l", "/path/to/detritus.nvim/bin/detritus-mcp.lua"]
     }
   }
 }
@@ -177,7 +219,7 @@ claude mcp add --scope user detritus -- \
 ```toml
 [mcp_servers.detritus]
 command = "nvim"
-args = ["--headless", "--clean", "-l", "/Users/you/detritus.nvim/bin/detritus-mcp.lua"]
+args = ["--headless", "--clean", "-l", "/path/to/detritus.nvim/bin/detritus-mcp.lua"]
 ```
 
 ### Tools
@@ -231,13 +273,11 @@ Neovim watches the data directory and `.git/HEAD` with libuv, debounced, and
 confirms real changes with `PRAGMA data_version`. A once-a-second poll (only
 while the panel is visible) is a safety net where file events are lossy.
 
-## Development
+## Contributing
 
-```sh
-nvim --headless --clean -l tests/run.lua          # everything
-nvim --headless --clean -l tests/run.lua db       # one spec by name
-```
+Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for
+how to run the tests and linters.
 
-The suite covers the SQLite binding, the data layer, scope resolution, the MCP
-protocol (it spawns the real server), rendering, and the panel UI including live
-updates, branch switching and `gd`.
+## License
+
+[MIT](LICENSE)
