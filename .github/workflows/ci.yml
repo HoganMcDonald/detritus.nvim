@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (${{ matrix.os }}, nvim ${{ matrix.nvim }})
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.nvim == 'nightly' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        nvim: [v0.10.0, stable, nightly]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: ${{ matrix.nvim }}
+      - name: Install libsqlite3
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-0
+      - name: Run tests
+        run: make test
+
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: JohnnyMorganz/stylua-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          version: latest
+          args: --check .
+
+  typecheck:
+    name: typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: stable
+      - name: Install lua-language-server
+        run: |
+          version=3.19.2
+          mkdir -p "$HOME/luals"
+          curl -fsSL "https://github.com/LuaLS/lua-language-server/releases/download/${version}/lua-language-server-${version}-linux-x64.tar.gz" \
+            | tar xz -C "$HOME/luals"
+          echo "$HOME/luals/bin" >> "$GITHUB_PATH"
+      - run: make typecheck
+
+  docs:
+    name: docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: stable
+      - run: make docs
