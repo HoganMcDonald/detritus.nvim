@@ -12,7 +12,7 @@ local function converse(requests, opts)
     lines[#lines + 1] = type(request) == "string" and request or vim.json.encode(request)
   end
   local res = vim
-    .system({ "nvim", "--headless", "--clean", "-l", root .. "/bin/detritus-mcp.lua" }, {
+    .system({ vim.v.progpath, "--headless", "--clean", "-l", root .. "/bin/detritus-mcp.lua" }, {
       cwd = opts.cwd,
       stdin = table.concat(lines, "\n") .. "\n",
       text = true,

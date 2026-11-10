@@ -2,6 +2,7 @@ local M = {}
 
 function M.check()
   vim.health.start("detritus")
+  vim.health.info("detritus.nvim " .. require("detritus").version)
 
   if vim.fn.has("nvim-0.10") == 1 then
     vim.health.ok("Neovim " .. tostring(vim.version()))

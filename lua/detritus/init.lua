@@ -2,6 +2,9 @@
 ---hands you over MCP.
 local M = {}
 
+---Keep in sync with the latest release tag (see CHANGELOG.md).
+M.version = "0.1.0"
+
 ---@param opts? table See detritus.config
 function M.setup(opts)
   require("detritus.config").setup(opts)
