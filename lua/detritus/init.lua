@@ -63,7 +63,7 @@ end
 ---@return string
 function M.root()
   local source = debug.getinfo(1, "S").source:sub(2)
-  return vim.fs.dirname(vim.fs.dirname(vim.fs.dirname(vim.fs.abspath(source))))
+  return vim.fs.dirname(vim.fs.dirname(vim.fs.dirname(vim.fn.fnamemodify(source, ":p"))))
 end
 
 ---Command that starts the MCP server over stdio, for any agent harness.

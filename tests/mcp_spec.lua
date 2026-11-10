@@ -1,7 +1,7 @@
 local h = require("harness")
 local t = h.t
 
-local root = vim.fs.dirname(vim.fs.dirname(vim.fs.abspath(debug.getinfo(1, "S").source:sub(2))))
+local root = vim.fs.dirname(vim.fs.dirname(vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p")))
 
 ---Spawn the real server, feed it requests, and return decoded responses by id.
 ---@param requests table[]

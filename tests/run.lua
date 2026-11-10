@@ -1,4 +1,4 @@
-local here = vim.fs.dirname(vim.fs.abspath(debug.getinfo(1, "S").source:sub(2)))
+local here = vim.fs.dirname(vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p"))
 local root = vim.fs.dirname(here)
 vim.opt.rtp:prepend(root)
 package.path = here .. "/?.lua;" .. package.path

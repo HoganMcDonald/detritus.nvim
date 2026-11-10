@@ -5,7 +5,7 @@
 -- Speaks MCP over stdio. The plan database defaults to
 -- ~/.local/share/detritus/detritus.db; override it with $DETRITUS_DB.
 local source = debug.getinfo(1, "S").source:sub(2)
-local root = vim.fs.dirname(vim.fs.dirname(vim.fs.abspath(source)))
+local root = vim.fs.dirname(vim.fs.dirname(vim.fn.fnamemodify(source, ":p")))
 vim.opt.rtp:prepend(root)
 
 local ok, err = pcall(function()
