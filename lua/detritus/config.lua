@@ -44,10 +44,16 @@ local layouts = { edgy = true, float = true, sidebar = true }
 ---@return detritus.Config
 function M.setup(opts)
   local merged = vim.tbl_deep_extend("force", vim.deepcopy(M.defaults), opts or {})
-  vim.validate("layout", merged.layout, function(v)
-    return layouts[v] == true
-  end, "one of 'edgy', 'float' or 'sidebar'")
-  vim.validate("width", merged.width, "number")
+  -- Checked by hand: the positional vim.validate form needs Neovim 0.11+.
+  if not layouts[merged.layout] then
+    error(
+      ("detritus: layout: expected one of 'edgy', 'float' or 'sidebar', got %s"):format(vim.inspect(merged.layout)),
+      2
+    )
+  end
+  if type(merged.width) ~= "number" then
+    error(("detritus: width: expected number, got %s"):format(type(merged.width)), 2)
+  end
   M.options = merged
   return merged
 end
