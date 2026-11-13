@@ -164,6 +164,13 @@ Symbols are resolved with LSP `documentSymbol` when a client is attached (so
 text search otherwise. Symbol-only references use `workspace/symbol`, then
 `git grep`. Code opens in your previous editing window, never in the panel.
 
+If a referenced file doesn't exist yet, `gd` opens an empty buffer for it
+(relative to the project root). Nothing touches the disk until you `:write`,
+which also creates any missing parent directories. A backticked token counts as
+a path when it contains a `/` or is a bare filename Neovim recognizes
+(`init.lua`, `Makefile`); anything else is treated as a symbol and never opens
+a new file.
+
 ### Commands
 
 `:Detritus [toggle|open|close|refresh|branch|clear|mcp]`

@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- `gd` on a reference to a file that does not exist yet now opens a new buffer
+  for it instead of reporting "file not found". The file (and any missing
+  parent directories) is only created when you `:write`.
+
 ## [0.1.0] - 2026-11-10
 
 ### Added

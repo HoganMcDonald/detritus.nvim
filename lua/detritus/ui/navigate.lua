@@ -49,9 +49,10 @@ local function target_window()
   return vim.api.nvim_get_current_win()
 end
 
+---Absolute paths `path` could refer to, most likely first.
 ---@param path string
----@return string? absolute
-local function resolve_path(path)
+---@return string[]
+local function path_candidates(path)
   local scope = panel.state.scope
   local candidates = {}
   if path:sub(1, 1) == "/" then
@@ -64,12 +65,62 @@ local function resolve_path(path)
     end
     candidates[#candidates + 1] = vim.fs.joinpath(vim.fn.getcwd(), path)
   end
-  for _, candidate in ipairs(candidates) do
+  return candidates
+end
+
+---@param path string
+---@return string? absolute
+local function resolve_path(path)
+  for _, candidate in ipairs(path_candidates(path)) do
     local stat = vim.uv.fs_stat(candidate)
     if stat and stat.type == "file" then
       return candidate
     end
   end
+end
+
+---Absolute path for a file that doesn't exist yet, anchored at the plan's
+---project root like a relative ref is when it exists.
+---@param path string
+---@return string? absolute, string? err
+local function new_file_path(path)
+  local absolute = path_candidates(path)[1]
+  if not absolute then
+    return nil, "cannot resolve path"
+  end
+  local stat = vim.uv.fs_stat(absolute)
+  if stat then
+    return nil, stat.type == "directory" and "is a directory" or "already exists"
+  end
+  return absolute
+end
+
+---Make the first `:write` of a not-yet-existing file create its parent
+---directories, so nothing touches the disk until the user saves.
+---@param buf integer
+local function mkdir_on_first_write(buf)
+  vim.api.nvim_create_autocmd("BufWritePre", {
+    buffer = buf,
+    once = true,
+    desc = "detritus: create parent directories of a new file",
+    callback = function(args)
+      vim.fn.mkdir(vim.fn.fnamemodify(args.match, ":p:h"), "p")
+    end,
+  })
+end
+
+---Whether a backticked token reads as a file path rather than a symbol:
+---it contains a directory separator, or is a bare name filetype detection
+---recognizes (`init.lua`, `Makefile`).
+---@param token string
+local function looks_like_path(token)
+  if token:find("[%s:<>(){}]") then
+    return false
+  end
+  if token:find("/", 1, true) then
+    return true
+  end
+  return token:find(".", 1, true) ~= nil and vim.filetype.match({ filename = token }) ~= nil
 end
 
 ---@param win integer
@@ -378,13 +429,22 @@ function M.open_target(target)
 
   if target.path then
     local absolute = resolve_path(target.path)
+    local created = false
     if not absolute then
-      return notify(("file not found: %s"):format(target.path))
+      local err
+      absolute, err = new_file_path(target.path)
+      if not absolute then
+        return notify(("cannot open %s: %s"):format(target.path, err))
+      end
+      created = true
     end
     vim.api.nvim_set_current_win(win)
     vim.cmd.edit(vim.fn.fnameescape(absolute))
     local buf = vim.api.nvim_get_current_buf()
-    if target.symbol then
+    if created then
+      mkdir_on_first_write(buf)
+      notify(("new file %s (written on :w)"):format(target.path), vim.log.levels.INFO)
+    elseif target.symbol then
       locate_in_buffer(buf, win, target.symbol, target.line)
     elseif target.line then
       jump(win, target.line)
@@ -409,6 +469,13 @@ local function token_to_target(token, refs)
     return { path = path, line = tonumber(line) }
   end
   if resolve_path(token) then
+    return { path = token }
+  end
+  -- A path that doesn't exist yet: `gd` opens a new buffer for it.
+  if path and looks_like_path(path) then
+    return { path = path, line = tonumber(line) }
+  end
+  if looks_like_path(token) then
     return { path = token }
   end
   -- A symbol one of the step's refs already points at keeps its file context.

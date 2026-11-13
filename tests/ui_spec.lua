@@ -205,8 +205,8 @@ describe("ui", function()
     t.truthy(vim.api.nvim_buf_get_name(0):find("src/main.rs", 1, true))
   end)
 
-  it("gd with a missing file notifies instead of erroring", function()
-    agent:add_steps(scope, { { text = "ghost", refs = { { path = "nope/missing.rs" } } } })
+  it("gd on a ref to a missing file opens a new buffer without touching the disk", function()
+    agent:add_steps(scope, { { text = "ghost", refs = { { path = "nope/missing.rs", symbol = "Nothing" } } } })
     t.truthy(wait_for(function()
       return buf_text():find("ghost", 1, true) ~= nil
     end))
@@ -219,7 +219,46 @@ describe("ui", function()
     end
     press("gd")
     vim.notify = original
-    t.truthy(messages[1] and messages[1]:find("file not found", 1, true))
+    t.eq(vim.api.nvim_get_current_win(), editor)
+    t.eq(vim.api.nvim_buf_get_name(0), vim.uv.fs_realpath(repo) .. "/nope/missing.rs")
+    t.falsy(vim.uv.fs_stat(repo .. "/nope"), "nothing on disk until written")
+    t.truthy(messages[1] and messages[1]:find("new file nope/missing.rs", 1, true))
+    t.eq(#messages, 1, "no symbol-not-found noise for a new file")
+    vim.api.nvim_buf_set_lines(0, 0, -1, false, { "// hi" })
+    vim.cmd.write()
+    t.eq(vim.fn.readfile(repo .. "/nope/missing.rs"), { "// hi" }, ":w creates parent directories and the file")
+    vim.cmd.edit(repo .. "/src/main.rs")
+  end)
+
+  it("gd on a backticked path that doesn't exist opens a new buffer", function()
+    agent:add_steps(scope, { { text = "Add `src/new/thing.rs` module" } })
+    t.truthy(wait_for(function()
+      return buf_text():find("src/new/thing.rs", 1, true) ~= nil
+    end))
+    detritus.open()
+    goto_line("src/new/thing.rs")
+    local line = vim.api.nvim_get_current_line()
+    vim.api.nvim_win_set_cursor(0, { vim.api.nvim_win_get_cursor(0)[1], (line:find("thing", 1, true)) })
+    press("gd")
+    t.truthy(vim.api.nvim_buf_get_name(0):find("src/new/thing.rs", 1, true))
+    t.falsy(vim.uv.fs_stat(repo .. "/src/new"), "nothing on disk until written")
+    vim.cmd.edit(repo .. "/src/main.rs")
+  end)
+
+  it("gd on a backticked symbol never opens a new file", function()
+    agent:add_steps(scope, { { text = "Rename `user.id` field" } })
+    t.truthy(wait_for(function()
+      return buf_text():find("user.id", 1, true) ~= nil
+    end))
+    detritus.open()
+    goto_line("user.id")
+    local line = vim.api.nvim_get_current_line()
+    vim.api.nvim_win_set_cursor(0, { vim.api.nvim_win_get_cursor(0)[1], (line:find("user", 1, true)) })
+    local original = vim.notify
+    vim.notify = function() end
+    press("gd")
+    vim.notify = original
+    t.falsy(vim.uv.fs_stat(repo .. "/user.id"))
   end)
 
   it("follows branch switches and keeps plans separate", function()
